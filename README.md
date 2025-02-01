@@ -1,1 +1,1 @@
-SQL Querie file
+SQL Queries file
