@@ -1,0 +1,100 @@
+Q1. Count of purchases per month (excluding refunded purchases)
+SELECT
+    TO_CHAR(purchase_time, 'YYYY-MM') AS month,
+    COUNT(*) AS purchase_count
+FROM transactions
+WHERE refund_time IS NULL
+GROUP BY TO_CHAR(purchase_time, 'YYYY-MM');
+_________________________________________________________________________________________________
+Q2. Number of stores with at least 5 transactions in October 2020
+SELECT
+    store_id,
+    COUNT(*) AS transaction_count
+FROM transactions
+WHERE TO_CHAR(purchase_time, 'YYYY-MM') = '2020-10'
+GROUP BY store_id
+HAVING COUNT(*) >= 5;
+___________________________________________________________________________________________________
+Q3. Shortest interval (in minutes) from purchase to refund time per store
+SELECT
+    store_id,
+    MIN(EXTRACT(MINUTE FROM (refund_time - purchase_time))*60
+        + EXTRACT(SECOND FROM (refund_time - purchase_time))) AS shortest_refund_interval
+FROM transactions
+WHERE refund_time IS NOT NULL
+GROUP BY store_id;
+____________________________________________________________________________________________________
+Q4. Gross transaction value of every store’s first order
+SELECT
+    t.store_id,
+    t.transaction_id,
+    t.purchase_time,
+    SUM(i.price * i.quantity) AS gross_transaction_value
+FROM transactions t
+JOIN items i ON t.transaction_id = i.transaction_id
+WHERE t.purchase_time = (
+    SELECT MIN(t2.purchase_time)
+    FROM transactions t2
+    WHERE t2.store_id = t.store_id
+)
+GROUP BY t.store_id, t.transaction_id, t.purchase_time;
+_________________________________________________________________________________________________________
+Q5. Most popular item name that buyers order on their first purchase
+SELECT
+    i.item_name,
+    COUNT(*) AS order_count
+FROM items i
+JOIN transactions t ON i.transaction_id = t.transaction_id
+WHERE t.purchase_time = (
+    SELECT MIN(t2.purchase_time)
+    FROM transactions t2
+    WHERE t2.buyer_id = t.buyer_id
+)
+GROUP BY i.item_name
+ORDER BY order_count DESC
+FETCH FIRST 1 ROWS ONLY;
+________________________________________________________________________________________________________
+Q6.
+SELECT
+    transaction_id,
+    purchase_time,
+    refund_time,
+    CASE
+        WHEN EXTRACT(DAY FROM (refund_time - purchase_time)) * 24 * 60 +
+             EXTRACT(HOUR FROM (refund_time - purchase_time)) * 60 +
+             EXTRACT(MINUTE FROM (refund_time - purchase_time)) <= 72 * 60
+        THEN 'Processed'
+        ELSE 'Not Processed'
+    END AS refund_status
+FROM transactions
+WHERE refund_time IS NOT NULL;
+__________________________________________________________________________________________________________
+Q7. Rank purchases per buyer and filter for second purchase (ignoring refunds)
+
+WITH RankedPurchases AS (
+    SELECT
+        t.buyer_id,
+        t.transaction_id,
+        t.purchase_time,
+        RANK() OVER (PARTITION BY t.buyer_id ORDER BY t.purchase_time) AS purchase_rank
+    FROM transactions t
+    WHERE t.refund_time IS NULL
+)
+SELECT buyer_id, transaction_id, purchase_time
+FROM RankedPurchases
+WHERE purchase_rank = 2;
+_____________________________________________________________________________________________________________
+Q8. Find second transaction time per buyer (without min/max functions)
+
+WITH OrderedTransactions AS (
+    SELECT
+        buyer_id,
+        transaction_id,
+        purchase_time,
+        ROW_NUMBER() OVER (PARTITION BY buyer_id ORDER BY purchase_time) AS row_num
+    FROM transactions
+)
+SELECT buyer_id, transaction_id, purchase_time
+FROM OrderedTransactions
+WHERE row_num = 2;
+
